@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+.venv/
+
+# Environment
+.env
+
+# Backend artifacts
+backend/error.log
+backend/*.log
+backend/embeddings_cache.pkl
+backend/embedding_cache.pkl
+backend/tasks.json
+backend/cluster_results.json
+backend/hash_db.json
+
+# Backend user data
+backend/static/uploads/
+backend/static/results/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User data
+gallery-dl/
+
+# Keep docs/ for GitHub Pages (tracked)
