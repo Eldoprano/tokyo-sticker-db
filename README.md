@@ -2,6 +2,10 @@
 
 Vibe coded sticker extraction and visual clustering tool.  
 
+<p align="center">
+  <a href="https://eldoprano.github.io/tokyo-sticker-db/"><strong>🔗 Live Demo</strong></a>
+</p>
+
 ## Features
 
 - **Automatic Sticker Extraction** - [SAM3](https://huggingface.co/facebook/sam3) detects and extracts stickers from images
