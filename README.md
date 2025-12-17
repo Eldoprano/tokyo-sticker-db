@@ -5,7 +5,7 @@ Vibe coded sticker extraction and visual clustering tool.
 ## Features
 
 - **Automatic Sticker Extraction** - [SAM3](https://huggingface.co/facebook/sam3) detects and extracts stickers from images
-- **Visual Clustering** - [DINOv2](https://huggingface.co/facebook/dinov2-base) embeddings + HDBSCAN groups similar stickers
+- **Visual Clustering** - [DINOv3](https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m) embeddings + HDBSCAN groups similar stickers
 - **Interactive Gallery** - Browse stickers by group or explore the embedding map
 
 ## Installation
@@ -42,7 +42,7 @@ python export_static.py  # Outputs to docs/
 
 - **Frontend**: React, Vite, Three.js
 - **Backend**: FastAPI, PyTorch
-- **Models**: SAM3 (segmentation), DINOv2 (embeddings)
+- **Models**: SAM3 (segmentation), DINOv3 (embeddings)
 
 ## License & Copyright
 

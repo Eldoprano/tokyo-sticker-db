@@ -1,8 +1,11 @@
 """
-DINOv2-based image embedding service for sticker similarity grouping.
+DINOv3-based image embedding service for sticker similarity grouping.
 
-Uses facebook/dinov2-base for generating 768-dimensional embeddings
-that capture fine-grained visual features robust to orientation and lighting.
+Uses facebook/dinov3-vitb16-pretrain-lvd1689m for generating 768-dimensional embeddings
+that capture fine-grained visual features robust to orientation, lighting, and occlusion.
+
+For stickers with occlusion/angle/warping, averaging patch vectors from last_hidden_state
+tends to be more reliable than using the pooler_output or CLS token alone.
 """
 
 import os
@@ -13,8 +16,12 @@ import torch
 from transformers import AutoImageProcessor, AutoModel
 
 
+# DINOv3 model to use - ViT-B/16 pretrained on LVD-1689M dataset
+DINOV3_MODEL = "facebook/dinov3-vitb16-pretrain-lvd1689m"
+
+
 class EmbeddingService:
-    """Lazy-loading DINOv2 embedding service."""
+    """Lazy-loading DINOv3 embedding service."""
     
     _instance: Optional["EmbeddingService"] = None
     
@@ -32,16 +39,19 @@ class EmbeddingService:
         return cls._instance
     
     def load_model(self):
-        """Load DINOv2 model and processor (lazy)."""
+        """Load DINOv3 model and processor (lazy)."""
         if self.model is not None:
             return
         
-        print("[EmbeddingService] Loading DINOv2 model...")
-        self.processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
-        self.model = AutoModel.from_pretrained("facebook/dinov2-base")
+        # Get HuggingFace token from environment for gated model access
+        hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+        
+        print(f"[EmbeddingService] Loading DINOv3 model ({DINOV3_MODEL})...")
+        self.processor = AutoImageProcessor.from_pretrained(DINOV3_MODEL, token=hf_token)
+        self.model = AutoModel.from_pretrained(DINOV3_MODEL, token=hf_token)
         self.model.to(self.device)
         self.model.eval()
-        print("[EmbeddingService] DINOv2 model loaded.")
+        print("[EmbeddingService] DINOv3 model loaded.")
     
     def get_embedding(self, image_path: str) -> np.ndarray:
         """
@@ -67,8 +77,10 @@ class EmbeddingService:
         
         with torch.no_grad():
             outputs = self.model(**inputs)
-            # Use CLS token embedding (first token)
-            embedding = outputs.last_hidden_state[:, 0, :].cpu().numpy().squeeze()
+            # Use mean of patch token embeddings (skip CLS token at position 0)
+            # This is more robust for stickers with occlusion/angle/warping
+            patch_tokens = outputs.last_hidden_state[:, 1:, :]  # Skip CLS token
+            embedding = patch_tokens.mean(dim=1).cpu().numpy().squeeze()
         
         return embedding.astype(np.float32)
     
@@ -108,13 +120,16 @@ class EmbeddingService:
                     progress_callback(len(all_embeddings))
                 continue
             
-            inputs = self.processor(images=batch_images, return_tensors="pt", padding=True)
+            inputs = self.processor(images=batch_images, return_tensors="pt")
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
             with torch.inference_mode():
                 with torch.autocast(device_type=self.device, dtype=torch.float16 if self.device == 'cuda' else torch.float32):
                     outputs = self.model(**inputs)
-                    embeddings = outputs.last_hidden_state[:, 0, :].cpu().float().numpy()
+                    # Use mean of patch token embeddings (skip CLS token at position 0)
+                    # This is more robust for stickers with occlusion/angle/warping
+                    patch_tokens = outputs.last_hidden_state[:, 1:, :]  # Skip CLS token
+                    embeddings = patch_tokens.mean(dim=1).cpu().float().numpy()
             
             # Map back embeddings, filling zeros for failed images
             batch_result = [np.zeros(768, dtype=np.float32)] * len(batch_paths)

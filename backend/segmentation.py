@@ -33,7 +33,7 @@ class RealSegmentator(BaseSegmentator):
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("Transformers library not found.")
         
-        # SAM3 for image segmentation (NOT Sam3VideoModel)
+        # SAM3 for image segmentation
         self.processor = Sam3Processor.from_pretrained(self.model_id, token=self.hf_token)
         self.model = Sam3Model.from_pretrained(self.model_id, token=self.hf_token).to(self.device)
         print("SAM3 model loaded successfully.")
