@@ -3,6 +3,19 @@ import { useStore, STATIC_MODE } from '../store';
 import { motion } from 'framer-motion';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 
+// Custom artist priority order (higher index = later in list)
+const ARTIST_ORDER: Record<string, number> = {
+    'SemantiClub': 0,
+    '_kawaii_sticker': 1,
+};
+
+const sortArtists = (a: string, b: string) => {
+    const orderA = ARTIST_ORDER[a] ?? 999;
+    const orderB = ARTIST_ORDER[b] ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.localeCompare(b);
+};
+
 interface GalleryProps {
     compact?: boolean;
 }
@@ -11,22 +24,30 @@ export const Gallery: React.FC<GalleryProps> = ({ compact }) => {
     const { images, selectedImageId, selectImage, selectedArtists, toggleArtist } = useStore();
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
-    // Unique Artists (Exclude Unknown)
+    // Unique Artists (Exclude Unknown) - sorted with custom priority
     const uniqueArtists = React.useMemo(() => {
         const artists = new Set(images
             .map(img => img.metadata?.artist)
             .filter(a => a && a !== 'Unknown') as string[]
         );
-        return Array.from(artists).sort();
+        return Array.from(artists).sort(sortArtists);
     }, [images]);
 
-    // Filtered Images
+    // Filtered Images - sorted by artist priority
     // Note: Even in compact mode (carousel), we now respect the global filter
     // so that the "next/prev" context matches what the user saw in the gallery.
     const filteredImages = React.useMemo(() => {
-        if (selectedArtists.length === 0) return images; // Empty selection shows ALL
-        const set = new Set(selectedArtists);
-        return images.filter(img => set.has(img.metadata?.artist || ''));
+        let result = images;
+        if (selectedArtists.length > 0) {
+            const set = new Set(selectedArtists);
+            result = images.filter(img => set.has(img.metadata?.artist || ''));
+        }
+        // Sort by artist priority
+        return [...result].sort((a, b) => {
+            const artistA = a.metadata?.artist || '';
+            const artistB = b.metadata?.artist || '';
+            return sortArtists(artistA, artistB);
+        });
     }, [images, selectedArtists]);
 
     // Scroll to selected image in compact mode
