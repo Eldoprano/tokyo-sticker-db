@@ -138,7 +138,7 @@ def copy_and_compress_assets(clusters):
     
     # Process images in parallel
     processed = 0
-    failed = 0
+    skipped = 0
     
     def process_sticker(static_path: str):
         # Path like /static/results/uuid/filename.png
@@ -164,7 +164,7 @@ def copy_and_compress_assets(clusters):
         
         # Incremental check: Skip if both full and thumb exist
         if dest_full.exists() and dest_thumb.exists():
-             return None # Already processed
+             return 'skipped'  # Already processed
         
         dest_full.parent.mkdir(parents=True, exist_ok=True)
         dest_thumb.parent.mkdir(parents=True, exist_ok=True)
@@ -177,16 +177,16 @@ def copy_and_compress_assets(clusters):
         futures = {executor.submit(process_sticker, p): p for p in sticker_paths}
         for i, future in enumerate(as_completed(futures)):
             result = future.result()
-            if result:
+            if result == 'skipped':
+                skipped += 1
+            elif result:
                 processed += 1
-            else:
-                failed += 1
             
             # Progress indicator
             if (i + 1) % 500 == 0:
                 print(f"    Processed {i + 1}/{len(sticker_paths)}...")
     
-    print(f"  ✓ Compressed {processed} images, {failed} failed")
+    print(f"  ✓ Compressed {processed} images, {skipped} skipped (already exist)")
     return processed
 
 

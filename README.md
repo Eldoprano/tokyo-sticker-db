@@ -9,14 +9,28 @@ AI-powered sticker extraction and visual clustering tool. Uses SAM3 for segmenta
 - **Interactive Gallery** - Browse stickers by group or explore the embedding map
 - **Static Export** - Deploy as a GitHub Pages site
 
+## Installation
+
+```bash
+# Install Python dependencies (requires Python 3.11+)
+cd backend && pip install -r requirements.txt
+
+# Install frontend dependencies
+cd frontend && npm install
+```
+
 ## Quick Start
 
 ```bash
+# Run both backend and frontend with one command
+./start.sh
+
+# Or run separately:
 # Backend
-cd backend && pip install -r requirements.txt && python main.py
+cd backend && python main.py
 
 # Frontend (separate terminal)
-cd frontend && npm install && npm run dev
+cd frontend && npm run dev
 ```
 
 ## Static Export
