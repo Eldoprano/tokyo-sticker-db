@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Sliders, RefreshCw, ChevronDown, ChevronUp, Grid, Layout, ExternalLink } from 'lucide-react';
+import { X, Sparkles, Sliders, RefreshCw, ChevronDown, ChevronUp, Grid, Layout, ExternalLink, Minimize2, Maximize2 } from 'lucide-react';
 import { PhysicsCanvas } from './PhysicsCanvas';
 import { StickerModal } from './StickerModal';
 import { getSourceUrl } from '../utils';
@@ -75,6 +75,7 @@ export const ImageViewer: React.FC = () => {
     const { images, selectedImageId, selectImage, regenerateTask, modelParams, updateModelParams, segmentationProgress, selectedArtists } = useStore();
     const selectedImage = images.find(i => i.id === selectedImageId);
     const [isParamsOpen, setIsParamsOpen] = useState(false);
+    const [isImageCollapsed, setIsImageCollapsed] = useState(false);
 
     // Compute filtered list to sync with Gallery context
     const filteredImages = useMemo(() => {
@@ -140,22 +141,32 @@ export const ImageViewer: React.FC = () => {
     // The backend provides `overlayUrl`. Let's use that as the source if available!
 
     return (
-        <div className="w-full flex-1 flex gap-8 h-full min-h-0 overflow-hidden">
+        <div className="w-full flex-1 flex flex-col md:flex-row gap-4 md:gap-8 h-full min-h-0 overflow-hidden">
             {/* Original View */}
             <motion.div
-                className="flex-1 glass-panel p-4 relative flex items-center justify-center overflow-hidden"
+                className={`glass-panel relative flex items-center justify-center overflow-hidden transition-all duration-300 ${isImageCollapsed ? 'h-14 min-h-[3.5rem] flex-none p-2' : 'flex-1 p-2 md:p-4'}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 key={selectedImageId}
             >
-                <button
-                    className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors z-10"
-                    onClick={() => selectImage(null as any)}
-                >
-                    <X color="white" />
-                </button>
+                {/* Controls */}
+                <div className="absolute top-2 right-2 flex gap-2 z-30">
+                    <button
+                        className="p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors text-white"
+                        onClick={() => setIsImageCollapsed(!isImageCollapsed)}
+                        title={isImageCollapsed ? "Show Image" : "Hide Image"}
+                    >
+                        {isImageCollapsed ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+                    </button>
+                    <button
+                        className="p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors text-white"
+                        onClick={() => selectImage(null as any)}
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
 
-                <div className="relative flex items-center justify-center w-full h-full">
+                <div className={`relative flex items-center justify-center w-full h-full ${isImageCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                     <InteractiveImage
                         src={selectedImage.overlayUrl || selectedImage.originalUrl}
                         stickers={selectedImage.resultUrls}
@@ -164,7 +175,13 @@ export const ImageViewer: React.FC = () => {
                     />
                 </div>
 
-                {isProcessing && (
+                {isImageCollapsed && (
+                    <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
+                        <span className="text-sm font-bold text-white/70">Original Image</span>
+                    </div>
+                )}
+
+                {isProcessing && !isImageCollapsed && (
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center flex-col z-20">
                         <Sparkles className="animate-spin text-accent-primary mb-4" size={48} />
                         <p className="text-xl font-bold text-white">Segmenting Stickers...</p>
@@ -181,7 +198,7 @@ export const ImageViewer: React.FC = () => {
 
             {/* Results View */}
             <motion.div
-                className="flex-1 glass-panel p-4 flex flex-col min-w-[400px]"
+                className="flex-1 glass-panel p-2 md:p-4 flex flex-col w-full md:w-auto md:min-w-[400px]"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
             >
@@ -301,7 +318,7 @@ export const ImageViewer: React.FC = () => {
                         <div className="w-full h-full overflow-y-auto p-4 custom-scrollbar">
                             <div
                                 className="grid gap-4"
-                                style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${stickerSize}px, 1fr))` }}
+                                style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${stickerSize}px, 1fr))` }}
                             >
                                 {selectedImage.resultUrls.map((sticker) => (
                                     <div

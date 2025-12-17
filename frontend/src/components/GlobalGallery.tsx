@@ -42,19 +42,19 @@ export const GlobalGallery: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-dark text-white overflow-hidden">
             {/* Toolbar */}
-            <div className="flex items-center gap-4 p-4 border-b border-white/5 bg-black/20 shrink-0 z-10">
+            <div className="flex items-center gap-2 md:gap-4 p-2 md:p-4 border-b border-white/5 bg-black/20 shrink-0 z-10 overflow-x-auto no-scrollbar">
                 <button
                     onClick={() => setCurrentView('home')}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-sm font-bold text-gray-300"
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-sm font-bold text-gray-300 shrink-0"
                 >
                     <ArrowLeft size={18} />
-                    Back
+                    <span className="hidden md:inline">Back</span>
                 </button>
 
-                <div className="h-6 w-px bg-white/10" />
+                <div className="h-6 w-px bg-white/10 shrink-0" />
 
                 {/* View Mode Switches */}
-                <div className="flex bg-black/40 rounded-lg p-1">
+                <div className="flex bg-black/40 rounded-lg p-1 shrink-0">
                     <div className="relative group/tooltip">
                         <button
                             onClick={() => setViewMode('canvas')}
@@ -75,20 +75,20 @@ export const GlobalGallery: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="h-6 w-px bg-white/10" />
+                <div className="h-6 w-px bg-white/10 shrink-0" />
 
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-text-secondary">Size</span>
+                <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-medium text-text-secondary hidden md:inline">Size</span>
                     <input
                         type="range" min="40" max="200" step="10"
                         value={stickerSize}
                         onChange={(e) => setStickerSize(parseInt(e.target.value))}
-                        className="w-32 accent-white h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        className="w-24 md:w-32 accent-white h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
                 </div>
 
-                <div className="ml-auto text-sm text-text-secondary font-medium">
-                    {allStickers.length} Stickers
+                <div className="ml-auto text-xs md:text-sm text-text-secondary font-medium shrink-0">
+                    {allStickers.length} <span className="hidden md:inline">Stickers</span>
                 </div>
             </div>
 
@@ -101,7 +101,7 @@ export const GlobalGallery: React.FC = () => {
                         onStickerClick={(path) => setFocusedSticker(path)}
                     />
                 ) : (
-                    <div className="w-full h-full overflow-y-auto p-8 custom-scrollbar">
+                    <div className="w-full h-full overflow-y-auto p-2 md:p-8 custom-scrollbar">
                         <div
                             className="grid gap-6"
                             style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${stickerSize}px, 1fr))` }}

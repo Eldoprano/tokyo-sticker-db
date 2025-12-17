@@ -105,7 +105,7 @@ export const Gallery: React.FC<GalleryProps> = ({ compact }) => {
 
             <div
                 ref={scrollContainerRef}
-                className={`w-full glass-panel p-4 ${compact ? 'overflow-x-auto flex gap-4 whitespace-nowrap scrollbar-hide' : 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'}`}
+                className={`w-full glass-panel p-2 md:p-4 ${compact ? 'overflow-x-auto flex gap-4 whitespace-nowrap scrollbar-hide' : 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4'}`}
             >
                 {filteredImages.map(img => (
                     <motion.div

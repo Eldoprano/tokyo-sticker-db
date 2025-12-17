@@ -246,18 +246,18 @@ export const GroupedGallery: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-dark text-text-primary overflow-hidden">
             {/* Toolbar */}
-            <div className="flex items-center gap-4 p-4 border-b border-white/5 bg-black/20 shrink-0 z-20 backdrop-blur-md">
-                <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-sm font-bold text-text-secondary">
-                    <ArrowLeft size={18} /> Back
+            <div className="flex items-center gap-2 md:gap-4 p-2 md:p-4 border-b border-white/5 bg-black/20 shrink-0 z-20 backdrop-blur-md overflow-x-auto no-scrollbar">
+                <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center gap-2 text-sm font-bold text-text-secondary shrink-0">
+                    <ArrowLeft size={18} /> <span className="hidden md:inline">Back</span>
                 </button>
-                <div className="h-6 w-px bg-white/10" />
-                <div className="flex items-center gap-2">
+                <div className="h-6 w-px bg-white/10 shrink-0" />
+                <div className="flex items-center gap-2 shrink-0">
                     <Layers size={18} className="text-accent-primary" />
-                    <span className="font-bold hidden sm:inline">Grouped Stickers</span>
+                    <span className="font-bold hidden md:inline">Grouped Stickers</span>
                 </div>
 
                 {/* Size Slider */}
-                <div className="flex items-center gap-2 ml-4 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                <div className="flex items-center gap-2 ml-auto md:ml-4 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 shrink-0">
                     <Minimize2 size={14} className="text-text-secondary" />
                     <input
                         type="range"
@@ -266,7 +266,7 @@ export const GroupedGallery: React.FC = () => {
                         step="10"
                         value={cardSize}
                         onChange={(e) => setCardSize(parseInt(e.target.value))}
-                        className="w-24 h-1 accent-accent-primary bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        className="w-20 md:w-24 h-1 accent-accent-primary bg-gray-700 rounded-lg appearance-none cursor-pointer"
                     />
                     <Maximize2 size={14} className="text-text-secondary" />
                 </div>
@@ -274,11 +274,11 @@ export const GroupedGallery: React.FC = () => {
                 {/* Map View Button */}
                 <button
                     onClick={() => setCurrentView('embedding-map')}
-                    className="ml-4 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-white/5"
+                    className="ml-2 md:ml-4 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-white/5 shrink-0"
                     title="View 3D Map"
                 >
                     <Map size={14} className="text-blue-400" />
-                    <span className="hidden sm:inline">Map View</span>
+                    <span className="hidden md:inline">Map View</span>
                 </button>
 
 
@@ -287,10 +287,10 @@ export const GroupedGallery: React.FC = () => {
                     <button
                         onClick={() => triggerClustering()}
                         disabled={clusterData.loading}
-                        className="ml-auto px-3 py-1.5 bg-accent-primary/20 hover:bg-accent-primary/40 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                        className="ml-auto md:ml-auto px-3 py-1.5 bg-accent-primary/20 hover:bg-accent-primary/40 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50 shrink-0"
                     >
                         <RefreshCw size={14} className={clusterData.loading ? 'animate-spin' : ''} />
-                        <span className="hidden sm:inline">Re-cluster</span>
+                        <span className="hidden md:inline">Re-cluster</span>
                     </button>
                 )}
 
@@ -298,7 +298,7 @@ export const GroupedGallery: React.FC = () => {
                 {!STATIC_MODE && (
                     <button
                         onClick={() => setShowSettings(!showSettings)}
-                        className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-white/20 text-white' : 'bg-white/5 text-text-secondary hover:text-white'}`}
+                        className={`p-2 rounded-lg transition-colors shrink-0 ${showSettings ? 'bg-white/20 text-white' : 'bg-white/5 text-text-secondary hover:text-white'}`}
                         title="Clustering Settings"
                     >
                         <Settings size={16} />
@@ -359,7 +359,7 @@ export const GroupedGallery: React.FC = () => {
                         <p className="text-lg font-medium">No stickers to group</p>
                     </div>
                 ) : (
-                    <div className="p-6 pb-20 space-y-8">
+                    <div className="p-2 md:p-6 pb-20 space-y-4 md:space-y-8">
                         {/* Render Rows */}
                         {rows.map((row, rowIndex) => {
                             // Check if any group in this row is expanded
@@ -368,9 +368,9 @@ export const GroupedGallery: React.FC = () => {
                             return (
                                 <div key={rowIndex} className="space-y-6">
                                     {/* The Grid Row */}
-                                    <div className="flex gap-6 flex-wrap" style={{ gap: '24px' }}>
+                                    <div className="flex gap-4 md:gap-6 flex-wrap" style={{ gap: window.innerWidth < 768 ? '16px' : '24px' }}>
                                         {row.map(group => (
-                                            <div key={group.id} id={`group-card-${group.id}`} className="flex-shrink-0">
+                                            <div key={group.id} id={`group-card-${group.id}`} className="flex-shrink-0 flex-grow" style={{ flexBasis: cardSize }}>
                                                 <GroupCard
                                                     group={group}
                                                     size={cardSize}

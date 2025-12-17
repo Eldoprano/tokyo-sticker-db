@@ -34,6 +34,8 @@ export const PhysicsCanvas: React.FC<PhysicsCanvasProps> = ({
     const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
     const isPanningRef = useRef(false);
     const lastMouseRef = useRef({ x: 0, y: 0 });
+    const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
+    const lastPinchDistRef = useRef<number | null>(null);
 
     // Physics controls
     const [attraction, setAttraction] = useState(0.0003);
@@ -188,6 +190,100 @@ export const PhysicsCanvas: React.FC<PhysicsCanvasProps> = ({
         return () => cancelAnimationFrame(frameRef.current);
     }, [attraction, repulsion, transform.x, transform.y, transform.scale]);
 
+    // Touch Handlers
+    const getTouchDistance = (t1: React.Touch, t2: React.Touch) => {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.hypot(dx, dy);
+    };
+
+    const getTouchCenter = (t1: React.Touch, t2: React.Touch) => {
+        return {
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2
+        };
+    };
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        e.preventDefault(); // Prevent scrolling
+        if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+
+            // Check if tapping a node
+            // Note: We need a way to detect node hit from touch coordinates if we want to support dragging nodes via touch on the main canvas handler.
+            // But usually the node's own event handler would fire? 
+            // `e.target` check is tricky with touch.
+            // Let's rely on standard events bubbling.
+            // If the user touches a node's div, that div's onTouchStart could fire? 
+            // We haven't added onTouchStart to the nodes yet. We should.
+            // For now, let's support Panning with 1 finger on background.
+            // If the target is the container, it's a pan.
+            if ((e.target as HTMLElement).dataset.pannable) {
+                isPanningRef.current = true;
+            }
+        } else if (e.touches.length === 2) {
+            isPanningRef.current = false; // Stop panning
+            draggingIdRef.current = null; // Stop dragging
+            lastPinchDistRef.current = getTouchDistance(e.touches[0], e.touches[1]);
+        }
+    }, []);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isPanningRef.current && lastTouchRef.current) {
+            const touch = e.touches[0];
+            const dx = touch.clientX - lastTouchRef.current.x;
+            const dy = touch.clientY - lastTouchRef.current.y;
+            setTransform(t => ({ ...t, x: t.x + dx, y: t.y + dy }));
+            lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+        } else if (e.touches.length === 1 && draggingIdRef.current) {
+            const touch = e.touches[0];
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) {
+                const canvasX = (touch.clientX - rect.left - transform.x) / transform.scale;
+                const canvasY = (touch.clientY - rect.top - transform.y) / transform.scale;
+                mouseCanvasRef.current = { x: canvasX, y: canvasY };
+            }
+        } else if (e.touches.length === 2 && lastPinchDistRef.current) {
+            const newDist = getTouchDistance(e.touches[0], e.touches[1]);
+            const center = getTouchCenter(e.touches[0], e.touches[1]);
+            const rect = containerRef.current?.getBoundingClientRect();
+
+            if (newDist > 10 && rect) {
+                const scaleChange = newDist / lastPinchDistRef.current;
+                const newScale = Math.max(0.2, Math.min(3, transform.scale * scaleChange));
+
+                // Zoom towards center of pinch
+                // Helper: calculate zoom relative to a point
+                // current point in canvas space
+                const centerX = center.x - rect.left;
+                const centerY = center.y - rect.top;
+
+                // We want (centerX, centerY) to stay at the same screen position
+                // newX = centerX - (centerX - oldX) * (newScale / oldScale)
+                // Wait, simplified:
+                const actualScaleChange = newScale / transform.scale;
+                const newX = centerX - (centerX - transform.x) * actualScaleChange;
+                const newY = centerY - (centerY - transform.y) * actualScaleChange;
+
+                setTransform({ x: newX, y: newY, scale: newScale });
+                lastPinchDistRef.current = newDist;
+            }
+        }
+    }, [transform]);
+
+    const handleTouchEnd = useCallback(() => {
+        isPanningRef.current = false;
+        if (draggingIdRef.current) {
+            const node = nodesRef.current.find(n => n.id === draggingIdRef.current);
+            if (node) node.isDragging = false;
+            draggingIdRef.current = null;
+        }
+        lastPinchDistRef.current = null;
+        lastTouchRef.current = null;
+    }, []);
+
     // Mouse handlers for drag & pan
     const handleMouseDown = useCallback((id: string, e: React.MouseEvent) => {
         e.preventDefault();
@@ -290,6 +386,9 @@ export const PhysicsCanvas: React.FC<PhysicsCanvasProps> = ({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             onWheel={handleWheel}
             data-pannable="true"
         >
@@ -316,6 +415,12 @@ export const PhysicsCanvas: React.FC<PhysicsCanvasProps> = ({
                             transition: node.isDragging ? 'none' : 'filter 0.2s'
                         }}
                         onMouseDown={(e) => handleMouseDown(node.id, e)}
+                        onTouchStart={(e) => {
+                            e.stopPropagation();
+                            draggingIdRef.current = node.id;
+                            const n = nodesRef.current.find(item => item.id === node.id);
+                            if (n) n.isDragging = true;
+                        }}
                         onDoubleClick={() => handleStickerClick(node.path)}
                     >
                         <img
