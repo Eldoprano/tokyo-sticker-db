@@ -302,6 +302,9 @@ export const useStore = create<AppState>((set, get) => ({
       images: state.images.map(img => img.id === id ? { ...img, priority } : img)
     }));
 
+    // Skip API call in static mode
+    if (STATIC_MODE) return;
+
     try {
       await axios.post(`${API_Base}/segment/priority`, { task_id: id, priority });
     } catch (e) {
@@ -568,8 +571,11 @@ function transformStaticTasks(_taskMeta: any, _groups: any[], _ungrouped: string
     });
 }
 
-// Helper logic for 'Next 5'
+// Helper logic for 'Next 5' - only runs in dynamic mode
 function startPreFetchLogic(currentId: string, images: StickerImage[]) {
+  // Skip in static mode - no backend to update
+  if (STATIC_MODE) return;
+
   const idx = images.findIndex(i => i.id === currentId);
   if (idx === -1) return;
 

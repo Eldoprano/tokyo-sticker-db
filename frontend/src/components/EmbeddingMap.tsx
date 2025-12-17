@@ -60,6 +60,19 @@ export const EmbeddingMap: React.FC = () => {
         });
     }, [embeddingMap]);
 
+    // Calculate center of all nodes for camera positioning
+    const mapCenter = useMemo(() => {
+        if (clusterNodes.length === 0) return { x: 0, y: 0, z: 0 };
+        const sumX = clusterNodes.reduce((sum, n) => sum + n.x, 0);
+        const sumY = clusterNodes.reduce((sum, n) => sum + n.y, 0);
+        const sumZ = clusterNodes.reduce((sum, n) => sum + n.z, 0);
+        return {
+            x: (sumX / clusterNodes.length) * 100,
+            y: (sumY / clusterNodes.length) * 100,
+            z: (sumZ / clusterNodes.length) * 100
+        };
+    }, [clusterNodes]);
+
     // Helper for URLs
     const getStickerUrl = (path: string) => {
         if (!path) return '';
@@ -111,11 +124,11 @@ export const EmbeddingMap: React.FC = () => {
 
             {/* Canvas - 3D Only */}
             <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden">
-                <Canvas camera={{ position: [0, 0, 100], fov: 60 }}>
+                <Canvas camera={{ position: [mapCenter.x, mapCenter.y, mapCenter.z + 100], fov: 60 }}>
                     <color attach="background" args={['#111']} />
                     <ambientLight intensity={0.5} />
                     <pointLight position={[100, 100, 100]} />
-                    <OrbitControls />
+                    <OrbitControls target={[mapCenter.x, mapCenter.y, mapCenter.z]} />
                     {/* Granular Suspense with NO fallback (null) for progressive loading without placeholders */}
                     {clusterNodes.map((node, i) => (
                         <Suspense
