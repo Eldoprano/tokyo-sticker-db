@@ -1,13 +1,12 @@
 # Tokyo Sticker DB
 
-AI-powered sticker extraction and visual clustering tool. Uses SAM3 for segmentation and DINOv2 for visual similarity grouping.
+Vibe coded sticker extraction and visual clustering tool.  
 
 ## Features
 
-- **Automatic Sticker Extraction** - SAM3 detects and extracts stickers from images
-- **Visual Clustering** - DINOv2 embeddings + HDBSCAN groups similar stickers
+- **Automatic Sticker Extraction** - [SAM3](https://huggingface.co/facebook/sam3) detects and extracts stickers from images
+- **Visual Clustering** - [DINOv2](https://huggingface.co/facebook/dinov2-base) embeddings + HDBSCAN groups similar stickers
 - **Interactive Gallery** - Browse stickers by group or explore the embedding map
-- **Static Export** - Deploy as a GitHub Pages site
 
 ## Installation
 
@@ -38,13 +37,3 @@ cd frontend && npm run dev
 ```bash
 python export_static.py  # Outputs to docs/
 ```
-
-## Tech Stack
-
-- **Frontend**: React, Vite, Three.js
-- **Backend**: FastAPI, PyTorch
-- **Models**: SAM3 (segmentation), DINOv2 (embeddings)
-
-## License
-
-MIT
