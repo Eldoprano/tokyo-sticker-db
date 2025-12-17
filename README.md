@@ -37,3 +37,17 @@ cd frontend && npm run dev
 ```bash
 python export_static.py  # Outputs to docs/
 ```
+
+## Tech Stack
+
+- **Frontend**: React, Vite, Three.js
+- **Backend**: FastAPI, PyTorch
+- **Models**: SAM3 (segmentation), DINOv2 (embeddings)
+
+## License & Copyright
+
+**Code**: MIT License - Feel free to use, modify, and distribute.
+
+**Images**: The stickers and images displayed on the demo site are sourced from third-party artists ([@SemantiClub](https://x.com/SemantiClub), [@_kawaii_sticker](https://x.com/_kawaii_sticker)) and remain the property of their respective creators. They are included for demonstration purposes only. If you are a rights holder and wish to have your content removed, please open an issue.
+
+For your own deployment, please use images you have the rights to use.
