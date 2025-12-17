@@ -142,6 +142,8 @@ export const EmbeddingMap: React.FC = () => {
                                     url={STATIC_MODE ? getStickerUrl(node.representative.path).replace('/results/', '/thumbs/') : getStickerUrl(node.representative.path)}
                                     scale={nodeSize / 10}
                                     transparent
+                                    // @ts-ignore
+                                    crossOrigin="anonymous"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setFocusedSticker(getFullStickerUrl(node.representative.path));
