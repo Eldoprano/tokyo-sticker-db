@@ -34,8 +34,17 @@ class RealSegmentator(BaseSegmentator):
             raise ImportError("Transformers library not found.")
         
         # SAM3 for image segmentation
-        self.processor = Sam3Processor.from_pretrained(self.model_id, token=self.hf_token)
-        self.model = Sam3Model.from_pretrained(self.model_id, token=self.hf_token).to(self.device)
+        try:
+            self.processor = Sam3Processor.from_pretrained(self.model_id, token=self.hf_token)
+            self.model = Sam3Model.from_pretrained(self.model_id, token=self.hf_token).to(self.device)
+        except Exception as e:
+            print(f"Warning: Failed to load SAM3 model online. Trying local cache. Error: {e}")
+            try:
+                self.processor = Sam3Processor.from_pretrained(self.model_id, token=self.hf_token, local_files_only=True)
+                self.model = Sam3Model.from_pretrained(self.model_id, token=self.hf_token, local_files_only=True).to(self.device)
+            except Exception as e2:
+                print(f"Error: Failed to load SAM3 model from local cache also. {e2}")
+                raise e2
         print("SAM3 model loaded successfully.")
 
     def segment(self, image_path: str, output_dir: str, **kwargs) -> List[str]:

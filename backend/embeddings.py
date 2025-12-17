@@ -47,8 +47,17 @@ class EmbeddingService:
         hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
         
         print(f"[EmbeddingService] Loading DINOv3 model ({DINOV3_MODEL})...")
-        self.processor = AutoImageProcessor.from_pretrained(DINOV3_MODEL, token=hf_token)
-        self.model = AutoModel.from_pretrained(DINOV3_MODEL, token=hf_token)
+        try:
+            self.processor = AutoImageProcessor.from_pretrained(DINOV3_MODEL, token=hf_token)
+            self.model = AutoModel.from_pretrained(DINOV3_MODEL, token=hf_token)
+        except Exception as e:
+            print(f"Warning: Failed to load DINOv3 model online. Trying local cache. Error: {e}")
+            try:
+                self.processor = AutoImageProcessor.from_pretrained(DINOV3_MODEL, token=hf_token, local_files_only=True)
+                self.model = AutoModel.from_pretrained(DINOV3_MODEL, token=hf_token, local_files_only=True)
+            except Exception as e2:
+                print(f"Error: Failed to load DINOv3 model from local cache also. {e2}")
+                raise e2
         self.model.to(self.device)
         self.model.eval()
         print("[EmbeddingService] DINOv3 model loaded.")
