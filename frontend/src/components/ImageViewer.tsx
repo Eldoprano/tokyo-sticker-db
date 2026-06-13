@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useStore } from '../store';
+import { useStore, STATIC_MODE } from '../store';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Sliders, RefreshCw, ChevronDown, ChevronUp, Grid, Layout, ExternalLink, Minimize2, Maximize2 } from 'lucide-react';
 import { PhysicsCanvas } from './PhysicsCanvas';
@@ -75,7 +75,7 @@ export const ImageViewer: React.FC = () => {
     const { images, selectedImageId, selectImage, regenerateTask, modelParams, updateModelParams, segmentationProgress, selectedArtists } = useStore();
     const selectedImage = images.find(i => i.id === selectedImageId);
     const [isParamsOpen, setIsParamsOpen] = useState(false);
-    const [isImageCollapsed, setIsImageCollapsed] = useState(false);
+    const [isImageCollapsed, setIsImageCollapsed] = useState(() => window.innerWidth < 768);
 
     // Compute filtered list to sync with Gallery context
     const filteredImages = useMemo(() => {
@@ -144,15 +144,15 @@ export const ImageViewer: React.FC = () => {
         <div className="w-full flex-1 flex flex-col md:flex-row gap-4 md:gap-8 h-full min-h-0 overflow-hidden">
             {/* Original View */}
             <motion.div
-                className={`glass-panel relative flex items-center justify-center overflow-hidden transition-all duration-300 ${isImageCollapsed ? 'h-14 min-h-[3.5rem] flex-none p-2' : 'flex-1 p-2 md:p-4'}`}
+                className={`glass-panel relative flex items-center justify-center overflow-hidden transition-all duration-300 ${isImageCollapsed ? 'h-14 min-h-[3.5rem] flex-none p-2 md:flex-1 md:h-auto' : 'flex-1 p-2 md:p-4'}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 key={selectedImageId}
             >
                 {/* Controls */}
-                <div className="absolute top-2 right-2 flex gap-2 z-30">
+                <div className="absolute top-2 right-2 z-30 flex gap-2">
                     <button
-                        className="p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors text-white"
+                        className="md:hidden p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors text-white"
                         onClick={() => setIsImageCollapsed(!isImageCollapsed)}
                         title={isImageCollapsed ? "Show Image" : "Hide Image"}
                     >
@@ -166,7 +166,7 @@ export const ImageViewer: React.FC = () => {
                     </button>
                 </div>
 
-                <div className={`relative flex items-center justify-center w-full h-full ${isImageCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <div className={`relative flex items-center justify-center w-full h-full ${isImageCollapsed ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'}`}>
                     <InteractiveImage
                         src={selectedImage.overlayUrl || selectedImage.originalUrl}
                         stickers={selectedImage.resultUrls}
@@ -176,7 +176,7 @@ export const ImageViewer: React.FC = () => {
                 </div>
 
                 {isImageCollapsed && (
-                    <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
+                    <div className="absolute inset-0 flex items-center px-4 pointer-events-none md:hidden">
                         <span className="text-sm font-bold text-white/70">Original Image</span>
                     </div>
                 )}
@@ -203,7 +203,7 @@ export const ImageViewer: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
             >
                 {/* Unified Toolbar */}
-                <div className="mb-4 flex flex-wrap items-center gap-4 p-3 bg-white/5 rounded-xl border border-white/5">
+                <div className="mb-4 flex items-center gap-4 p-3 bg-white/5 rounded-xl border border-white/5">
                     {/* View Toggle */}
                     <div className="flex bg-black/40 rounded-lg p-1">
                         <button
@@ -237,71 +237,69 @@ export const ImageViewer: React.FC = () => {
                         />
                     </div>
 
-                    <div className="h-6 w-px bg-white/10" />
+                    {!STATIC_MODE && (
+                        <>
+                            <div className="h-6 w-px bg-white/10" />
 
-                    {/* Model Parameters Popover/Expandable */}
-                    <div className="relative group">
-                        <button
-                            className="flex items-center gap-2 text-xs font-bold text-gray-300 hover:text-white transition-colors py-1 px-2 rounded-lg hover:bg-white/5"
-                            onClick={() => setIsParamsOpen(!isParamsOpen)}
-                        >
-                            <Sliders size={14} />
-                            Params
-                            {isParamsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        </button>
-                    </div>
-
-                    <div className="flex-1" />
-
-                    {/* Regenerate Action */}
-                    <button
-                        onClick={handleRegenerate}
-                        disabled={isProcessing}
-                        className="py-1.5 px-3 bg-accent-secondary/20 hover:bg-accent-secondary/30 text-accent-secondary rounded-lg flex items-center gap-2 text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
-                    >
-                        <RefreshCw size={12} className={isProcessing ? "animate-spin" : ""} />
-                        Regenerate
-                    </button>
-                </div>
-
-                {/* Collapsible Param Panel */}
-                <AnimatePresence>
-                    {isParamsOpen && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden mb-4"
-                        >
-                            <div className="p-3 bg-white/5 rounded-lg border border-white/5 flex gap-6">
-                                <div className="flex-1">
-                                    <div className="flex justify-between text-xs mb-1 text-gray-400">
-                                        <span className="font-medium text-white">IOU Threshold</span>
-                                        <span className="text-accent-primary">{modelParams.iouThreshold}</span>
-                                    </div>
-                                    <input
-                                        type="range" min="0.1" max="1.0" step="0.05"
-                                        value={modelParams.iouThreshold}
-                                        onChange={(e) => updateModelParams({ iouThreshold: parseFloat(e.target.value) })}
-                                        className="w-full accent-accent-primary h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between text-xs mb-1 text-gray-400">
-                                        <span className="font-medium text-white">Score Threshold</span>
-                                        <span className="text-accent-pink">{modelParams.scoreThreshold}</span>
-                                    </div>
-                                    <input
-                                        type="range" min="0.1" max="1.0" step="0.05"
-                                        value={modelParams.scoreThreshold}
-                                        onChange={(e) => updateModelParams({ scoreThreshold: parseFloat(e.target.value) })}
-                                        className="w-full accent-accent-pink h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                    />
-                                </div>
+                            {/* Model Parameters Popover */}
+                            <div className="relative">
+                                <button
+                                    className="flex items-center gap-2 text-xs font-bold text-gray-300 hover:text-white transition-colors py-1 px-2 rounded-lg hover:bg-white/5"
+                                    onClick={() => setIsParamsOpen(!isParamsOpen)}
+                                >
+                                    <Sliders size={14} />
+                                    Params
+                                    {isParamsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                                <AnimatePresence>
+                                    {isParamsOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -4 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -4 }}
+                                            className="absolute top-full left-0 mt-2 z-50 w-72 p-3 bg-gray-900 border border-white/10 rounded-xl shadow-xl"
+                                        >
+                                            <div className="flex flex-col gap-3">
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <span className="font-medium text-white w-28 shrink-0">IOU Threshold</span>
+                                                    <input
+                                                        type="range" min="0.1" max="1.0" step="0.05"
+                                                        value={modelParams.iouThreshold}
+                                                        onChange={(e) => updateModelParams({ iouThreshold: parseFloat(e.target.value) })}
+                                                        className="flex-1 accent-accent-primary h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <span className="text-accent-primary w-8 text-right tabular-nums">{modelParams.iouThreshold}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <span className="font-medium text-white w-28 shrink-0">Score Threshold</span>
+                                                    <input
+                                                        type="range" min="0.1" max="1.0" step="0.05"
+                                                        value={modelParams.scoreThreshold}
+                                                        onChange={(e) => updateModelParams({ scoreThreshold: parseFloat(e.target.value) })}
+                                                        className="flex-1 accent-accent-pink h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <span className="text-accent-pink w-8 text-right tabular-nums">{modelParams.scoreThreshold}</span>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
-                        </motion.div>
+
+                            <div className="flex-1" />
+
+                            {/* Regenerate Action */}
+                            <button
+                                onClick={handleRegenerate}
+                                disabled={isProcessing}
+                                className="py-1.5 px-3 bg-accent-secondary/20 hover:bg-accent-secondary/30 text-accent-secondary rounded-lg flex items-center gap-2 text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw size={12} className={isProcessing ? "animate-spin" : ""} />
+                                Regenerate
+                            </button>
+                        </>
                     )}
-                </AnimatePresence>
+                </div>
 
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white/90">
                     <Sparkles className="text-accent-pink" size={20} />

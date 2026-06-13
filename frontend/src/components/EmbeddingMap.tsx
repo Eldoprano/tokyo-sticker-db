@@ -1,4 +1,10 @@
-import React, { useMemo, useState, useRef, Suspense } from 'react';
+import React, { useMemo, useState, useRef, Suspense, Component } from 'react';
+
+class NodeErrorBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
+    state = { failed: false };
+    static getDerivedStateFromError() { return { failed: true }; }
+    render() { return this.state.failed ? null : this.props.children; }
+}
 import { useStore, STATIC_MODE } from '../store';
 import { ArrowLeft } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
@@ -25,6 +31,8 @@ interface MapNode {
 export const EmbeddingMap: React.FC = () => {
     const { setCurrentView, clusterData, fetchClusters } = useStore();
     const containerRef = useRef<HTMLDivElement>(null);
+    const isDragging = useRef(false);
+    const pointerStart = useRef({ x: 0, y: 0 });
 
     React.useEffect(() => {
         if (clusterData.groups.length === 0) fetchClusters();
@@ -123,7 +131,17 @@ export const EmbeddingMap: React.FC = () => {
             </div>
 
             {/* Canvas - 3D Only */}
-            <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden">
+            <div
+                ref={containerRef}
+                className="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden"
+                onPointerDown={(e) => { pointerStart.current = { x: e.clientX, y: e.clientY }; isDragging.current = false; }}
+                onPointerMove={(e) => {
+                    if (e.buttons === 0) return;
+                    const dx = e.clientX - pointerStart.current.x;
+                    const dy = e.clientY - pointerStart.current.y;
+                    if (dx * dx + dy * dy > 25) isDragging.current = true;
+                }}
+            >
                 <Canvas camera={{ position: [mapCenter.x, mapCenter.y, mapCenter.z + 100], fov: 60 }}>
                     <color attach="background" args={['#111']} />
                     <ambientLight intensity={0.5} />
@@ -131,26 +149,26 @@ export const EmbeddingMap: React.FC = () => {
                     <OrbitControls target={[mapCenter.x, mapCenter.y, mapCenter.z]} />
                     {/* Granular Suspense with NO fallback (null) for progressive loading without placeholders */}
                     {clusterNodes.map((node, i) => (
-                        <Suspense
-                            key={i}
-                            fallback={null}
-                        >
-                            <Billboard
-                                position={[node.x * 100, node.y * 100, (node.z || 0) * 100]}
-                            >
-                                <DreiImage
-                                    url={STATIC_MODE ? getStickerUrl(node.representative.path).replace('/results/', '/thumbs/') : getStickerUrl(node.representative.path)}
-                                    scale={nodeSize / 10}
-                                    transparent
-                                    // @ts-ignore
-                                    crossOrigin="anonymous"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFocusedSticker(getFullStickerUrl(node.representative.path));
-                                    }}
-                                />
-                            </Billboard>
-                        </Suspense>
+                        <NodeErrorBoundary key={i}>
+                            <Suspense fallback={null}>
+                                <Billboard
+                                    position={[node.x * 100, node.y * 100, (node.z || 0) * 100]}
+                                >
+                                    <DreiImage
+                                        url={getStickerUrl(node.representative.path)}
+                                        scale={nodeSize / 10}
+                                        transparent
+                                        // @ts-ignore
+                                        crossOrigin="anonymous"
+                                        onClick={(e) => {
+                                            if (isDragging.current) return;
+                                            e.stopPropagation();
+                                            setFocusedSticker(getFullStickerUrl(node.representative.path));
+                                        }}
+                                    />
+                                </Billboard>
+                            </Suspense>
+                        </NodeErrorBoundary>
                     ))}
                 </Canvas>
             </div>

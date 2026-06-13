@@ -280,13 +280,27 @@ def copy_and_compress_uploads(tasks):
             new_fname = Path(fname).stem + ".jpg"
         dest = uploads_dst / new_fname
 
-        # Incremental: skip if already exported
+        # Always compute scale factor (needed for box rescaling even on incremental runs)
+        scale_x, scale_y = 1.0, 1.0
+        try:
+            with Image.open(src) as orig_img:
+                orig_w, orig_h = orig_img.size
+            if dest.exists():
+                with Image.open(dest) as exported_img:
+                    exp_w, exp_h = exported_img.size
+                scale_x = exp_w / orig_w
+                scale_y = exp_h / orig_h
+        except Exception:
+            pass
+
         if not dest.exists():
             try:
                 with Image.open(src) as img:
                     img = img.convert("RGBA") if _has_alpha(img) else img.convert("RGB")
                     if max(img.size) > UPLOAD_MAX_SIZE:
                         img.thumbnail((UPLOAD_MAX_SIZE, UPLOAD_MAX_SIZE), Image.LANCZOS)
+                    scale_x = img.size[0] / orig_w
+                    scale_y = img.size[1] / orig_h
                     if USE_WEBP:
                         img.save(dest, "WEBP", quality=UPLOAD_QUALITY, method=6)
                     else:
@@ -300,6 +314,19 @@ def copy_and_compress_uploads(tasks):
                 print(f"  ⚠️  Error processing {fname}: {e}")
                 shutil.copy2(src, uploads_dst / fname)
                 new_fname = fname
+
+        # Scale bounding boxes to match the resized upload
+        if scale_x != 1.0 or scale_y != 1.0:
+            for t in task_refs:
+                for r in t.get("result_paths", []):
+                    box = r.get("box")
+                    if box and len(box) == 4:
+                        r["box"] = [
+                            round(box[0] * scale_x, 2),
+                            round(box[1] * scale_y, 2),
+                            round(box[2] * scale_x, 2),
+                            round(box[3] * scale_y, 2),
+                        ]
 
         # Update tasks if name changed
         if new_fname != fname:
