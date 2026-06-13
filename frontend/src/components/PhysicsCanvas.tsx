@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, Magnet, Zap } from 'lucide-react';
+import { Magnet, Zap } from 'lucide-react';
+import { StickerModal } from './StickerModal';
 
 interface PhysicsNode {
     id: string;
@@ -499,33 +500,15 @@ export const PhysicsCanvas: React.FC<PhysicsCanvasProps> = ({
                 Drag stickers • Double-click to expand
             </p>
 
-            {/* Focused Modal */}
+            {/* Focused Modal - rich viewer with Source link + Similar Stickers strip */}
             <AnimatePresence>
                 {focusedSticker && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-8"
-                        onClick={() => setFocusedSticker(null)}
-                    >
-                        <motion.div
-                            className="relative max-w-full max-h-full flex items-center justify-center"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <button
-                                className="absolute -top-4 -right-4 bg-white/10 hover:bg-white/30 p-2 rounded-full text-white transition-colors z-20"
-                                onClick={() => setFocusedSticker(null)}
-                            >
-                                <X size={20} />
-                            </button>
-                            <img
-                                src={focusedSticker}
-                                alt="Focused"
-                                className="max-w-full max-h-[85vh] object-contain drop-shadow-[0_0_50px_rgba(255,255,255,0.2)]"
-                            />
-                        </motion.div>
-                    </motion.div>
+                    <StickerModal
+                        stickerPath={focusedSticker}
+                        onClose={() => setFocusedSticker(null)}
+                        onChangeSticker={setFocusedSticker}
+                        siblings={stickers.map(s => s.path)}
+                    />
                 )}
             </AnimatePresence>
         </div>

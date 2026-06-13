@@ -2,9 +2,20 @@
 """
 Static Export Script for Tokyo Sticker DB
 Automates the process of creating a static GitHub Pages version.
+
+Optimized for GitHub Pages: by default it encodes sticker images as WebP
+(with transparency preserved) at modest dimensions, which typically shrinks
+the exported `docs/` folder by ~60-70% versus the previous PNG/JPEG output.
+
+NOTE: WebP renames files (e.g. `name.png` -> `name.webp`), so the exported
+`data.json` paths are remapped to match. If you previously exported with a
+different format, clear the old output once before re-exporting:
+
+    rm -rf docs/static && python3 export_static.py
 """
 
 import os
+import re
 import json
 import shutil
 import subprocess
@@ -19,17 +30,34 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 DOCS_DIR = PROJECT_ROOT / "docs"
 STATIC_DIR = DOCS_DIR / "static"
 
-# Image compression settings
-THUMBNAIL_SIZE = 150  # px max dimension for thumbnails
-FULL_MAX_SIZE = 600   # px max dimension for full images (reduces 3MB files to ~100KB)
-FULL_QUALITY = 75     # JPEG quality for full images
-THUMB_QUALITY = 65    # JPEG quality for thumbnails
+# Image format / compression settings
+USE_WEBP = True       # WebP (with alpha) is far smaller than PNG for these stickers
+THUMBNAIL_SIZE = 128  # px max dimension for thumbnails (used by grids/maps)
+FULL_MAX_SIZE = 512   # px max dimension for full sticker images (modal/zoom)
+UPLOAD_MAX_SIZE = 1280  # px max dimension for original uploads (home gallery)
+
+# Quality settings (WebP if USE_WEBP, otherwise JPEG/PNG)
+FULL_QUALITY = 80     # quality for full sticker images
+THUMB_QUALITY = 72    # quality for thumbnails
+UPLOAD_QUALITY = 78   # quality for original uploads
+
+
+def static_ext(path: str) -> str:
+    """Return the path with its extension swapped to the export format."""
+    if not USE_WEBP:
+        return path
+    # Replace only the final extension (handles names like `foo.jpg_sticker_1.png`)
+    return re.sub(r"\.[^/.]+$", ".webp", path)
+
+
+def _has_alpha(img: Image.Image) -> bool:
+    return img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
 
 
 def load_backend_data():
     """Load cluster results and task metadata."""
     print("📦 Loading backend data...")
-    
+
     # Load cluster results
     cluster_file = BACKEND_DIR / "cluster_results.json"
     if cluster_file.exists():
@@ -38,7 +66,7 @@ def load_backend_data():
     else:
         print("  ⚠️  No cluster_results.json found")
         clusters = {"groups": [], "ungrouped": [], "embedding_map": []}
-    
+
     # Load tasks for metadata
     tasks_file = BACKEND_DIR / "tasks.json"
     if tasks_file.exists():
@@ -47,65 +75,56 @@ def load_backend_data():
     else:
         print("  ⚠️  No tasks.json found")
         tasks = []
-    
-    # Build task lookup by sticker path
+
+    # Build task lookup by sticker path (keyed by the EXPORTED/static path)
     task_meta = {}
-    
+
     # Handle both list and dict formats for tasks.json
     task_list = tasks.values() if isinstance(tasks, dict) else tasks
-    
+
     for task in task_list:
         if not isinstance(task, dict):
             continue
-            
+
         metadata = task.get("metadata", {})
         for result in task.get("result_paths", []):
             path = result.get("path", "")
             if path:
-                task_meta[path] = metadata
-    
+                task_meta[static_ext(path)] = metadata
+
     print(f"  ✓ Loaded {len(clusters.get('groups', []))} groups, {len(clusters.get('ungrouped', []))} ungrouped")
-    
+
     return clusters, task_meta
 
 
+def _save_optimized(img: Image.Image, dest: Path, quality: int):
+    """Save an already-sized PIL image in the configured format."""
+    if USE_WEBP:
+        img.save(dest, "WEBP", quality=quality, method=6)
+    elif dest.suffix.lower() == ".png":
+        img.save(dest, "PNG", optimize=True)
+    else:
+        img.save(dest, "JPEG", quality=quality, optimize=True)
+
+
 def compress_image(src_path: Path, dest_full: Path, dest_thumb: Path):
-    """Compress a single image and create thumbnail."""
+    """Compress a single image and create a thumbnail."""
     try:
         with Image.open(src_path) as img:
-            # Resize if larger than max size
-            if max(img.size) > FULL_MAX_SIZE:
-                img.thumbnail((FULL_MAX_SIZE, FULL_MAX_SIZE), Image.LANCZOS)
-            
-            # Convert RGBA to RGB with white background for JPEG, or keep PNG
-            if src_path.suffix.lower() == '.png':
-                # For PNGs with transparency, keep as PNG but compress
-                if img.mode == 'RGBA':
-                    # Save full PNG (lossless but optimized, resized)
-                    img.save(dest_full, 'PNG', optimize=True)
-                    # Create thumbnail
-                    img_thumb = img.copy()
-                    img_thumb.thumbnail((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
-                    img_thumb.save(dest_thumb, 'PNG', optimize=True)
-                else:
-                    img.save(dest_full, 'PNG', optimize=True)
-                    img_thumb = img.copy()
-                    img_thumb.thumbnail((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
-                    img_thumb.save(dest_thumb, 'PNG', optimize=True)
-            else:
-                # Convert to JPEG for non-transparent images
-                if img.mode in ('RGBA', 'P'):
-                    bg = Image.new('RGB', img.size, (255, 255, 255))
-                    bg.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                    img = bg
-                elif img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                img.save(dest_full, 'JPEG', quality=FULL_QUALITY, optimize=True)
-                img_thumb = img.copy()
-                img_thumb.thumbnail((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
-                img_thumb.save(dest_thumb, 'JPEG', quality=THUMB_QUALITY, optimize=True)
-        
+            # Preserve transparency for stickers; otherwise flatten to RGB.
+            img = img.convert("RGBA") if _has_alpha(img) else img.convert("RGB")
+
+            # Full-size (resized down if needed)
+            full = img.copy()
+            if max(full.size) > FULL_MAX_SIZE:
+                full.thumbnail((FULL_MAX_SIZE, FULL_MAX_SIZE), Image.LANCZOS)
+            _save_optimized(full, dest_full, FULL_QUALITY)
+
+            # Thumbnail
+            thumb = img.copy()
+            thumb.thumbnail((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
+            _save_optimized(thumb, dest_thumb, THUMB_QUALITY)
+
         return True
     except Exception as e:
         print(f"  ⚠️  Failed to compress {src_path.name}: {e}")
@@ -115,88 +134,103 @@ def compress_image(src_path: Path, dest_full: Path, dest_thumb: Path):
 def copy_and_compress_assets(clusters):
     """Copy and compress sticker images."""
     print("\n🖼️  Compressing and copying sticker images...")
-    
-    results_src = BACKEND_DIR / "static" / "results"
+
     results_dst = STATIC_DIR / "results"
     thumbs_dst = STATIC_DIR / "thumbs"
-    
+
     results_dst.mkdir(parents=True, exist_ok=True)
     thumbs_dst.mkdir(parents=True, exist_ok=True)
-    
-    # Collect all sticker paths
+
+    # Collect all (original) sticker paths to process
     sticker_paths = set()
     for group in clusters.get("groups", []):
         sticker_paths.update(group.get("sticker_paths", []))
     sticker_paths.update(clusters.get("ungrouped", []))
-    
-    # Also include paths from embedding_map
     for item in clusters.get("embedding_map", []):
         if "path" in item:
             sticker_paths.add(item["path"])
-    
+
     print(f"  Found {len(sticker_paths)} stickers to process")
-    
-    # Process images in parallel
+
     processed = 0
     skipped = 0
-    
+
     def process_sticker(static_path: str):
-        # Path like /static/results/uuid/filename.png
+        # Source path like /static/results/uuid/filename.png
         rel = static_path.replace("/static/", "")
         src = BACKEND_DIR / "static" / rel
-        
+
         if not src.exists():
             return None
-            
-        # Maintain directory structure
-        dest_rel = Path(rel)
+
+        # Destination keeps the dir structure but uses the export extension.
+        dest_rel = Path(static_ext(rel))
         dest_full = STATIC_DIR / dest_rel
-        
-        # Thumbs path: Strip 'results/' prefix if present so we get /thumbs/uuid/file
-        # rel is typically "results/uuid/filename"
+
+        # Thumbs path: strip leading 'results/' so we get /thumbs/uuid/file
         parts = list(dest_rel.parts)
-        if parts[0] == 'results':
-            dest_thumb_rel = Path(*parts[1:])
-        else:
-            dest_thumb_rel = dest_rel
-            
+        dest_thumb_rel = Path(*parts[1:]) if parts and parts[0] == "results" else dest_rel
         dest_thumb = thumbs_dst / dest_thumb_rel
-        
-        # Incremental check: Skip if both full and thumb exist
+
+        # Incremental check: skip if both full and thumb already exist
         if dest_full.exists() and dest_thumb.exists():
-             return 'skipped'  # Already processed
-        
+            return "skipped"
+
         dest_full.parent.mkdir(parents=True, exist_ok=True)
         dest_thumb.parent.mkdir(parents=True, exist_ok=True)
-        
+
         if compress_image(src, dest_full, dest_thumb):
             return static_path
         return None
-    
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(process_sticker, p): p for p in sticker_paths}
         for i, future in enumerate(as_completed(futures)):
             result = future.result()
-            if result == 'skipped':
+            if result == "skipped":
                 skipped += 1
             elif result:
                 processed += 1
-            
-            # Progress indicator
+
             if (i + 1) % 500 == 0:
                 print(f"    Processed {i + 1}/{len(sticker_paths)}...")
-    
+
     print(f"  ✓ Compressed {processed} images, {skipped} skipped (already exist)")
     return processed
+
+
+def _remap_clusters(clusters):
+    """Rewrite all sticker paths in cluster data to the exported format."""
+    for group in clusters.get("groups", []):
+        group["sticker_paths"] = [static_ext(p) for p in group.get("sticker_paths", [])]
+    clusters["ungrouped"] = [static_ext(p) for p in clusters.get("ungrouped", [])]
+    for item in clusters.get("embedding_map", []):
+        if "path" in item:
+            item["path"] = static_ext(item["path"])
+        # Round coordinates to keep data.json small
+        for k in ("x", "y", "z"):
+            if isinstance(item.get(k), (int, float)):
+                item[k] = round(item[k], 4)
+    return clusters
+
+
+def _remap_tasks(tasks):
+    """Rewrite result/upload paths in tasks to the exported format."""
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        for r in task.get("result_paths", []):
+            if r.get("path"):
+                r["path"] = static_ext(r["path"])
+    return tasks
 
 
 def export_data(clusters, task_meta, tasks):
     """Export combined data.json for the static frontend."""
     print("\n📄 Exporting data.json...")
-    
+
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Create combined data structure
+
     data = {
         "groups": clusters.get("groups", []),
         "ungrouped": clusters.get("ungrouped", []),
@@ -204,97 +238,94 @@ def export_data(clusters, task_meta, tasks):
         "total_ungrouped": clusters.get("total_ungrouped", 0),
         "embedding_map": clusters.get("embedding_map", []),
         "task_metadata": task_meta,
-        "tasks": tasks
+        "tasks": tasks,
     }
-    
+
     with open(DOCS_DIR / "data.json", "w") as f:
-        json.dump(data, f, separators=(',', ':'))  # Compact JSON
-    
+        json.dump(data, f, separators=(",", ":"))  # Compact JSON
+
     print(f"  ✓ Exported data.json ({(DOCS_DIR / 'data.json').stat().st_size / 1024 / 1024:.1f} MB)")
 
 
 def copy_and_compress_uploads(tasks):
     """Copy and compress original upload images, updating task metadata."""
     print("\n📷 Copying and compressing original uploads...")
-    
+
     uploads_src = BACKEND_DIR / "static" / "uploads"
     uploads_dst = DOCS_DIR / "static" / "uploads"
     uploads_dst.mkdir(parents=True, exist_ok=True)
-    
+
     task_list = tasks.values() if isinstance(tasks, dict) else tasks
-    
-    # 1. Identify files and their tasks
-    file_map = {} # filename -> list of tasks
+
+    # Map filename -> list of tasks referencing it
+    file_map = {}
     for task in task_list:
         if isinstance(task, dict) and "image_path" in task:
             fname = Path(task["image_path"]).name
-            if fname not in file_map:
-                file_map[fname] = []
-            file_map[fname].append(task)
-            
+            file_map.setdefault(fname, []).append(task)
+
     print(f"  Found {len(file_map)} unique uploads to process")
-    
-    copied = 0
-    converted = 0
-    
+
+    out_ext = ".webp" if USE_WEBP else None  # None => keep original/JPEG behavior
+    processed = 0
+
     for fname, task_refs in file_map.items():
         src = uploads_src / fname
         if not src.exists():
             continue
-            
-        final_fname = fname
-        
-        try:
-            with Image.open(src) as img:
-                is_transparent = img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info)
-                
-                if is_transparent:
-                    # Copy as is
-                    shutil.copy2(src, uploads_dst / fname)
-                    copied += 1
-                else:
-                    # Convert to JPEG
-                    if img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    
-                    new_fname = Path(fname).stem + ".jpg"
-                    dest = uploads_dst / new_fname
-                    img.save(dest, "JPEG", quality=FULL_QUALITY, optimize=True)
-                    final_fname = new_fname
-                    converted += 1
-        except Exception as e:
-            print(f"  ⚠️  Error processing {fname}: {e}")
-            shutil.copy2(src, uploads_dst / fname)
-            copied += 1
-            
+
+        if USE_WEBP:
+            new_fname = Path(fname).stem + ".webp"
+        else:
+            new_fname = Path(fname).stem + ".jpg"
+        dest = uploads_dst / new_fname
+
+        # Incremental: skip if already exported
+        if not dest.exists():
+            try:
+                with Image.open(src) as img:
+                    img = img.convert("RGBA") if _has_alpha(img) else img.convert("RGB")
+                    if max(img.size) > UPLOAD_MAX_SIZE:
+                        img.thumbnail((UPLOAD_MAX_SIZE, UPLOAD_MAX_SIZE), Image.LANCZOS)
+                    if USE_WEBP:
+                        img.save(dest, "WEBP", quality=UPLOAD_QUALITY, method=6)
+                    else:
+                        if img.mode == "RGBA":
+                            bg = Image.new("RGB", img.size, (255, 255, 255))
+                            bg.paste(img, mask=img.split()[-1])
+                            img = bg
+                        img.save(dest, "JPEG", quality=UPLOAD_QUALITY, optimize=True)
+                processed += 1
+            except Exception as e:
+                print(f"  ⚠️  Error processing {fname}: {e}")
+                shutil.copy2(src, uploads_dst / fname)
+                new_fname = fname
+
         # Update tasks if name changed
-        if final_fname != fname:
+        if new_fname != fname:
             for t in task_refs:
-                # Update image_path. Assumes /static/uploads/ structure constant.
-                # Only replace filename at end.
                 p = Path(t["image_path"])
-                new_path = p.parent / final_fname
-                t["image_path"] = str(new_path)
-                
-    print(f"  ✓ Processed uploads: {copied} copied, {converted} compressed to JPEG")
+                t["image_path"] = str(p.parent / new_fname)
+
+    _ = out_ext  # documentation of intent
+    print(f"  ✓ Processed uploads: {processed} compressed")
 
 
 def build_frontend():
     """Build the React frontend in static mode."""
     print("\n🔨 Building frontend in static mode...")
-    
-    # Run npm build with static config
+
     result = subprocess.run(
         ["npm", "run", "build:static"],
         cwd=FRONTEND_DIR,
         capture_output=True,
-        text=True
+        text=True,
     )
-    
+
     if result.returncode != 0:
         print(f"  ❌ Build failed:\n{result.stderr}")
         return False
-    
+
     print("  ✓ Frontend built successfully")
     return True
 
@@ -310,14 +341,15 @@ def copy_icon():
 def main():
     print("=" * 60)
     print("🚀 Tokyo Sticker DB - Static Export")
+    print(f"   Format: {'WebP' if USE_WEBP else 'PNG/JPEG'} | "
+          f"sticker<= {FULL_MAX_SIZE}px | thumb<= {THUMBNAIL_SIZE}px | upload<= {UPLOAD_MAX_SIZE}px")
     print("=" * 60)
-    
-    # Ensure docs dir exists (Incremental: don't delete if exists)
+
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Load data
+
+    # Load data (task_meta is keyed by the EXPORTED static path)
     clusters, task_meta = load_backend_data()
-    
+
     # Re-load tasks for export
     tasks_file = BACKEND_DIR / "tasks.json"
     if tasks_file.exists():
@@ -325,31 +357,29 @@ def main():
             tasks_raw = json.load(f)
     else:
         tasks_raw = []
-    
-    # Convert tasks to list if it's a dict (backend format)
-    if isinstance(tasks_raw, dict):
-        tasks_list = list(tasks_raw.values())
-    else:
-        tasks_list = tasks_raw
-    
-    # Copy and compress uploads FIRST (so metadata updates)
+
+    tasks_list = list(tasks_raw.values()) if isinstance(tasks_raw, dict) else tasks_raw
+
+    # Compress uploads FIRST (this rewrites task image_path values)
     copy_and_compress_uploads(tasks_list)
-    
-    # Export data.json (including tasks with updated paths)
+
+    # Compress sticker images (incremental) from the ORIGINAL backend paths
+    copy_and_compress_assets(clusters)
+
+    # Remap all paths in the data to the exported format, then write data.json
+    _remap_clusters(clusters)
+    _remap_tasks(tasks_list)
     export_data(clusters, task_meta, tasks_list)
 
-    # Copy and compress images (incremental)
-    copy_and_compress_assets(clusters)
-    
     # Build frontend
     build_frontend()
-    
+
     # Copy icon
     copy_icon()
-    
+
     # Calculate final size
     total_size = sum(f.stat().st_size for f in DOCS_DIR.rglob("*") if f.is_file())
-    
+
     print("\n" + "=" * 60)
     print(f"✅ Export complete! Total size: {total_size / 1024 / 1024:.1f} MB")
     print(f"📁 Output: {DOCS_DIR}")

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useStore, STATIC_MODE } from '../store';
 import { AnimatePresence } from 'framer-motion';
 import { Grid, Layout, ArrowLeft } from 'lucide-react';
@@ -6,11 +6,21 @@ import { PhysicsCanvas } from './PhysicsCanvas';
 import { StickerModal } from './StickerModal';
 import { getSourceUrl } from '../utils';
 
+// How many stickers to render at once in the grid before requiring a scroll.
+// Keeps the DOM small so GitHub Pages isn't hit with thousands of image
+// requests on first paint (the main cause of lag / rate-limiting).
+const GRID_PAGE_SIZE = 80;
+// The physics canvas is O(n^2); cap how many stickers it simulates so it
+// stays smooth even on collections with tens of thousands of stickers.
+const CANVAS_MAX_NODES = 250;
+
 export const GlobalGallery: React.FC = () => {
     const { images, clusterData, setCurrentView } = useStore();
     const [viewMode, setViewMode] = useState<'canvas' | 'grid'>('grid');
     const [stickerSize, setStickerSize] = useState(100);
     const [focusedSticker, setFocusedSticker] = useState<string | null>(null);
+    const [visibleCount, setVisibleCount] = useState(GRID_PAGE_SIZE);
+    const sentinelRef = useRef<HTMLDivElement>(null);
 
     // Flatten all stickers with source info
     const allStickers = useMemo(() => {
@@ -38,6 +48,43 @@ export const GlobalGallery: React.FC = () => {
             return (img.resultUrls || []).map(s => ({ ...s, sourceUrl: src }));
         });
     }, [images, clusterData]);
+
+    // Only render a window of the grid; grow it as the user scrolls down.
+    const visibleStickers = useMemo(
+        () => allStickers.slice(0, visibleCount),
+        [allStickers, visibleCount]
+    );
+
+    // For the heavy physics canvas, only ever simulate a bounded subset.
+    const canvasStickers = useMemo(
+        () => allStickers.slice(0, CANVAS_MAX_NODES),
+        [allStickers]
+    );
+
+    // Reset the paging window when the dataset changes.
+    useEffect(() => {
+        setVisibleCount(GRID_PAGE_SIZE);
+    }, [allStickers]);
+
+    // Infinite scroll: load the next page when the sentinel scrolls into view.
+    useEffect(() => {
+        if (viewMode !== 'grid') return;
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) {
+                    setVisibleCount((prev) =>
+                        Math.min(prev + GRID_PAGE_SIZE, allStickers.length)
+                    );
+                }
+            },
+            { rootMargin: '600px' }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [viewMode, allStickers.length, visibleCount]);
 
     return (
         <div className="flex flex-col h-full bg-bg-dark text-white overflow-hidden">
@@ -88,7 +135,14 @@ export const GlobalGallery: React.FC = () => {
                 </div>
 
                 <div className="ml-auto text-xs md:text-sm text-text-secondary font-medium shrink-0">
-                    {allStickers.length} <span className="hidden md:inline">Stickers</span>
+                    {viewMode === 'canvas' && allStickers.length > CANVAS_MAX_NODES ? (
+                        <span title={`Canvas shows the first ${CANVAS_MAX_NODES} for performance`}>
+                            {CANVAS_MAX_NODES} / {allStickers.length}
+                        </span>
+                    ) : (
+                        allStickers.length
+                    )}{' '}
+                    <span className="hidden md:inline">Stickers</span>
                 </div>
             </div>
 
@@ -96,7 +150,7 @@ export const GlobalGallery: React.FC = () => {
             <div className="flex-1 overflow-hidden relative">
                 {viewMode === 'canvas' ? (
                     <PhysicsCanvas
-                        stickers={allStickers}
+                        stickers={canvasStickers}
                         stickerSize={stickerSize}
                         onStickerClick={(path) => setFocusedSticker(path)}
                     />
@@ -106,7 +160,7 @@ export const GlobalGallery: React.FC = () => {
                             className="grid gap-6"
                             style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${stickerSize}px, 1fr))` }}
                         >
-                            {allStickers.map((sticker, idx) => (
+                            {visibleStickers.map((sticker, idx) => (
                                 <div
                                     key={`${sticker.path}-${idx}-grid`}
                                     className="aspect-square bg-white/5 rounded-xl flex items-center justify-center p-4 cursor-pointer hover:bg-white/10 transition-colors"
@@ -116,11 +170,22 @@ export const GlobalGallery: React.FC = () => {
                                         src={sticker.path}
                                         alt=""
                                         loading="lazy"
+                                        decoding="async"
                                         className="w-full h-full object-contain"
                                     />
                                 </div>
                             ))}
                         </div>
+
+                        {/* Infinite-scroll sentinel + remaining count */}
+                        {visibleCount < allStickers.length && (
+                            <div
+                                ref={sentinelRef}
+                                className="flex justify-center py-8 text-xs text-text-secondary"
+                            >
+                                Loading more… ({visibleCount} / {allStickers.length})
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
